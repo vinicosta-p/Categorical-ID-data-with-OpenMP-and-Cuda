@@ -39,6 +39,8 @@ fstream mainDataset;
 fstream finalDataset;
 vector<vector<string>> matrizDeDados;
 map<string, int> idxColuna;
+bool fimDoArq;
+vector<string> nomesArquivos;
 
 void criarMapComNomeDaColunaAndPosicao();
 
@@ -48,10 +50,27 @@ void escrita_do_dataset(vector<vector<string>> escritaMatriz);
 
 void pairCodigoDescricao(string nomeArquivo);
 
-vector<string> nomesArquivos;
+
+
+void testes() {
+    auto start = std::chrono::steady_clock::now();
+    mainDataset.open("dataset_00_1000_sem_virg.csv", fstream::in);
+    fstream arq;
+    arq.open("teste.txt", fstream::app);
+    string str;
+    int cont = 0;
+    while (!mainDataset.eof()) {
+        getline(mainDataset, str);
+        arq << str.c_str() << endl;
+    }
+    auto end = chrono::steady_clock::now();
+    std::cout << "Tempo       : " << chrono::duration_cast<chrono::microseconds>(end - start).count() << "ms" << endl;    // Ending of parallel region 
+};
 
 int main(int argc, char* argv[])
 {
+   
+   // testes();
     auto start = std::chrono::steady_clock::now();
 
     nomesArquivos = { "cdtup.csv", "berco.csv", "portoatracacao.csv", "mes.csv", "tipooperacao.csv",
@@ -64,36 +83,35 @@ int main(int argc, char* argv[])
         return -1;
     }
    
-
-    criarMapComNomeDaColunaAndPosicao();
     
+    criarMapComNomeDaColunaAndPosicao();
+    fimDoArq = false;
     int NUM_LINHAS_LIDAS = 0;
-   
-    #pragma omp parallel
-    {   
+    while (!fimDoArq)
+    {
+        NUM_LINHAS_LIDAS = atualizarDataSet();
        
-        #pragma omp single
-        {   
-            if (NUM_LINHAS_LIDAS == 0)
-            { 
-                escrita_do_dataset(matrizDeDados);
-            }
-            NUM_LINHAS_LIDAS = atualizarDataSet();
-        }
-        
+        #pragma omp parallel
+        {
 
-        #pragma omp barrier 
-
-        #pragma omp for nowait
+            #pragma omp for nowait
             for (int i = 0; i < nomesArquivos.size(); ++i) {
-                printf("%s\n", matrizDeDados[1][idxColuna[nomesArquivos[i]]].c_str());
+                //  printf("%s\n", matrizDeDados[1][idxColuna[nomesArquivos[i]]].c_str());
                 pairCodigoDescricao(nomesArquivos[i]);
-          
-            }
-        
-        #pragma omp barrier
-    }
 
+            }
+
+            #pragma omp barrier
+                   
+        }
+        if (NUM_LINHAS_LIDAS > 0)
+        {
+            //cout << NUM_LINHAS_LIDAS << endl;
+            escrita_do_dataset(matrizDeDados);
+            matrizDeDados.clear();
+        }
+    }
+   
 
 
     mainDataset.close();
@@ -101,7 +119,6 @@ int main(int argc, char* argv[])
     
     auto end = chrono::steady_clock::now();
     std::cout << "Tempo       : " << chrono::duration_cast<chrono::microseconds>(end - start).count() << "ms" << endl;    // Ending of parallel region 
-
 }
 /*
     Esse map de consulta para saber o nome da coluna e o index que está associado.
@@ -128,14 +145,17 @@ int atualizarDataSet() {
     for (numLinhas = 0; numLinhas < NUM_DE_LINHAS_DA_MATRIZ; numLinhas++) {
         for (int i = 0; i < 25; i++) {
             string dado;
-            getline(mainDataset, dado, ',');
-            /*
-            if (getline(mainDataset, dado, ',') is ios::eofbit) {
+            //RESOLVER BUG DA ÚLTIMA LINHA NAO ADICIONAR '0\n'
+            // solução temporia: adicionar = '0\n' na função de escrita do dataset
+            if (!getline(mainDataset, dado, ',')) {
+                fimDoArq = true;
+                cout << "fim do arquivo " << dado << endl;
                 return numLinhas;
             };
-            */
             dadosLocais.push_back(dado);
+            dado.clear();
         }
+        
        
         matrizDeDados.push_back(dadosLocais);
         dadosLocais.clear();
