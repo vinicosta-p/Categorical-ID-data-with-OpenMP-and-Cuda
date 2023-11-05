@@ -41,6 +41,7 @@ vector<vector<string>> matrizDeDados;
 map<string, int> idxColuna;
 bool fimDoArq;
 vector<string> nomesArquivos;
+int NUM_LINHAS_LIDAS;
 
 void criarMapComNomeDaColunaAndPosicao();
 
@@ -50,6 +51,9 @@ void escrita_do_dataset(vector<vector<string>> escritaMatriz);
 
 void pairCodigoDescricao(string nomeArquivo);
 
+void linhaInicial();
+
+string inteiroParaString(int valor);
 
 
 void testes() {
@@ -78,15 +82,17 @@ int main(int argc, char* argv[])
     
 
     mainDataset.open("dataset_00_1000_sem_virg.csv", fstream::in);
-
+    
     if (mainDataset.is_open() == false) {
         return -1;
     }
    
     
+    linhaInicial();
     criarMapComNomeDaColunaAndPosicao();
     fimDoArq = false;
-    int NUM_LINHAS_LIDAS = 0;
+    NUM_LINHAS_LIDAS = 0;
+
     while (!fimDoArq)
     {
         NUM_LINHAS_LIDAS = atualizarDataSet();
@@ -96,20 +102,16 @@ int main(int argc, char* argv[])
 
             #pragma omp for nowait
             for (int i = 0; i < nomesArquivos.size(); ++i) {
-                //  printf("%s\n", matrizDeDados[1][idxColuna[nomesArquivos[i]]].c_str());
-                pairCodigoDescricao(nomesArquivos[i]);
+               // pairCodigoDescricao(nomesArquivos[i]);
 
             }
 
             #pragma omp barrier
                    
         }
-        if (NUM_LINHAS_LIDAS > 0)
-        {
             //cout << NUM_LINHAS_LIDAS << endl;
-            escrita_do_dataset(matrizDeDados);
-            matrizDeDados.clear();
-        }
+        escrita_do_dataset(matrizDeDados);
+        matrizDeDados.clear();
     }
    
 
@@ -124,6 +126,20 @@ int main(int argc, char* argv[])
     Esse map de consulta para saber o nome da coluna e o index que está associado.
     esse map é utilizado na função pairCodigoDescricao()
 */
+void linhaInicial() {
+    
+    finalDataset.open("dataset_00_1000_sem_virg_FINAL.csv", fstream::app);
+
+    string linha;
+    
+    getline(mainDataset, linha);
+
+    finalDataset << linha;
+
+    finalDataset.close();
+    
+}
+
 void criarMapComNomeDaColunaAndPosicao() {
     vector<int> numeroDaColuna = { 1, 2, 3, 5, 6, 7, 8, 17, 18, 20, 23 };
     int numColum = 0;
@@ -149,7 +165,7 @@ int atualizarDataSet() {
             // solução temporia: adicionar = '0\n' na função de escrita do dataset
             if (!getline(mainDataset, dado, ',')) {
                 fimDoArq = true;
-                cout << "fim do arquivo " << dado << endl;
+                //cout << "fim do arquivo " << dado << endl;
                 return numLinhas;
             };
             dadosLocais.push_back(dado);
@@ -177,7 +193,10 @@ void escrita_do_dataset(vector<vector<string>> escritaMatriz) {
             finalDataset << escritaMatriz[i][j].c_str() << ',';
         }
     }
-
+    //GAMBIARRA. ACHAR UMA SOLUÇÃO MAIS LIMPA SEM QUEBRA DE FLUXO: O MOTIVO FOI A FUNÇÃO DE GETLINE NAO ESTAVA PEGANDO O ULTIMO VALOR
+    if (fimDoArq) {
+        finalDataset << "0\n";
+    }
     finalDataset.close();
 }
 
@@ -190,10 +209,40 @@ void pairCodigoDescricao(string nomeArquivo) {
 
     if (arquivo.is_open()) {
         
-       
+        for (int i = 0; i < NUM_LINHAS_LIDAS; i++) {
+            string dado = matrizDeDados[i][NUM_COLUM];
+            string linha;
+            string id;
+            string valor;
+            int countID = 0;
+            bool encontrouNoDicionario = true;
+            
+            while (getline(arquivo, linha)) {
+                countID++;
+                int posVirgula = linha.find(',');
+                int posFinal = linha.size();
+                id = linha.substr(0, posVirgula);
+                valor = linha.substr(posVirgula, posFinal);
+                if (valor.compare(dado)) {
+                    matrizDeDados[i][NUM_COLUM] = id;
+                    encontrouNoDicionario = false;
+                    break;
+                }
+            }
+            if (encontrouNoDicionario == true) {
+                id = inteiroParaString(countID);
+                matrizDeDados[i][NUM_COLUM] = id;
+                arquivo << id << "," << dado << endl;
+            }
+        }
         arquivo.close();
     }
     else {
         std::cout << "Erro ao abrir o arquivo: " << nomeArquivo << std::endl;
     }
+}
+
+string inteiroParaString(int valor) {
+    string a;
+    return a;
 }
