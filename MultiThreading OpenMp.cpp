@@ -6,20 +6,16 @@
 *           
 *           LOOP -> acaba quando não houver mais linhas para ler
 *           {
-*               1.(Thread Única) lê o dataset e armazena em uma matriz com um tamanho x(a definir) de linhas e 26 colunas
-*               2. distribui as threads para que elas 
+*               1.(Thread Principal) lê o dataset e armazena em uma matriz com um tamanho x(a definir) de linhas e 26 colunas
+*               2.(MultiThread) distribui as threads para que elas 
 *                   -> criem os arquivos coluna.csv
 *                   -> leem a matriz, verificam se o valor lido está no arquivo ** SE NÃO ESTIVER insere o valor no arquivo ** e troca a string da matriz para o id
 *                   -> esperam as outras threads
-*               3.(Thread Única) escreve o arquivo final
+*               3.(Thread Principal) escreve o arquivo final
 * 
 *           Recursos criados:
 *               var de nome das colunas 
 *               dicionário com o valor das index da coluna dos dados categóricos
-* 
-*           NOTAS:
-*               Pensar nesse loop de forma individual(prioridade 1)
-*               Pensar na busca de arquivo das threads(prioridade 2)
 */
 
 
@@ -53,35 +49,26 @@ void pairCodigoDescricao(string nomeArquivo);
 
 void linhaInicial();
 
-string inteiroParaString(int valor);
-
-
-void testes() {
-    auto start = std::chrono::steady_clock::now();
-    mainDataset.open("dataset_00_1000_sem_virg.csv", fstream::in);
-    fstream arq;
-    arq.open("teste.txt", fstream::app);
-    string str;
-    int cont = 0;
-    while (!mainDataset.eof()) {
-        getline(mainDataset, str);
-        arq << str.c_str() << endl;
+void limpaArquivo() {
+    for (int i = 0; i < nomesArquivos.size(); ++i) {
+        fstream arq;
+        arq.open(nomesArquivos[i], fstream::out);
+       // arq.clear();
+        arq.close();
     }
-    auto end = chrono::steady_clock::now();
-    std::cout << "Tempo       : " << chrono::duration_cast<chrono::microseconds>(end - start).count() << "ms" << endl;    // Ending of parallel region 
 };
+
 
 int main(int argc, char* argv[])
 {
    
-   // testes();
+    
     auto start = std::chrono::steady_clock::now();
 
     nomesArquivos = { "cdtup.csv", "berco.csv", "portoatracacao.csv", "mes.csv", "tipooperacao.csv",
         "tiponavegacaoatracacao.csv", "terminal.csv", "origem.csv", "destino.csv", "naturezacarga.csv", "sentido.csv" };
-    
-
-    mainDataset.open("dataset_00_1000_sem_virg.csv", fstream::in);
+    limpaArquivo();
+    mainDataset.open("dataset_00_sem_virg.csv", fstream::in);
     
     if (mainDataset.is_open() == false) {
         return -1;
@@ -102,14 +89,13 @@ int main(int argc, char* argv[])
 
             #pragma omp for nowait
             for (int i = 0; i < nomesArquivos.size(); ++i) {
-               // pairCodigoDescricao(nomesArquivos[i]);
+               pairCodigoDescricao(nomesArquivos[i]);
 
             }
 
             #pragma omp barrier
                    
         }
-            //cout << NUM_LINHAS_LIDAS << endl;
         escrita_do_dataset(matrizDeDados);
         matrizDeDados.clear();
     }
@@ -117,10 +103,9 @@ int main(int argc, char* argv[])
 
 
     mainDataset.close();
-    
-    
+
     auto end = chrono::steady_clock::now();
-    std::cout << "Tempo       : " << chrono::duration_cast<chrono::microseconds>(end - start).count() << "ms" << endl;    // Ending of parallel region 
+    std::cout << "Tempo       : " << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms" << endl;    // Ending of parallel region 
 }
 /*
     Esse map de consulta para saber o nome da coluna e o index que está associado.
@@ -203,46 +188,41 @@ void escrita_do_dataset(vector<vector<string>> escritaMatriz) {
 
 void pairCodigoDescricao(string nomeArquivo) {
 
-    std::fstream arquivo;
-    arquivo.open(nomeArquivo, fstream::in | fstream::out | fstream::app);
+    
     int NUM_COLUM = idxColuna[nomeArquivo];
-
-    if (arquivo.is_open()) {
-        
-        for (int i = 0; i < NUM_LINHAS_LIDAS; i++) {
-            string dado = matrizDeDados[i][NUM_COLUM];
-            string linha;
-            string id;
-            string valor;
-            int countID = 0;
-            bool encontrouNoDicionario = true;
+  
+    for (int i = 0; i < NUM_LINHAS_LIDAS; i++) {
+        std::fstream arquivo;
+        arquivo.open(nomeArquivo, fstream::in);
+        string dado = matrizDeDados[i][NUM_COLUM];
+        string linha;
+        string id;
+        string valor;
+        int countID = 1;
+        bool encontrouNoDicionario = true;
             
-            while (getline(arquivo, linha)) {
-                countID++;
-                int posVirgula = linha.find(',');
-                int posFinal = linha.size();
-                id = linha.substr(0, posVirgula);
-                valor = linha.substr(posVirgula, posFinal);
-                if (valor.compare(dado)) {
-                    matrizDeDados[i][NUM_COLUM] = id;
-                    encontrouNoDicionario = false;
-                    break;
-                }
-            }
-            if (encontrouNoDicionario == true) {
-                id = inteiroParaString(countID);
+        while (getline(arquivo, linha)) {
+            countID++;
+            int posVirgula = linha.find(',');
+            int posFinal = linha.size();
+            id = linha.substr(0, posVirgula);
+            valor = linha.substr(posVirgula+1, posFinal);
+            if (valor.compare(dado) == 0) {
                 matrizDeDados[i][NUM_COLUM] = id;
-                arquivo << id << "," << dado << endl;
+                encontrouNoDicionario = false;
+                break;
             }
+            
+        }
+        if (encontrouNoDicionario == true) {
+            arquivo.close();
+            arquivo.open(nomeArquivo, fstream::app);
+            id = to_string(countID);
+            matrizDeDados[i][NUM_COLUM] = id;
+            arquivo << id << "," << dado << endl;
+            arquivo.seekg(0);
         }
         arquivo.close();
     }
-    else {
-        std::cout << "Erro ao abrir o arquivo: " << nomeArquivo << std::endl;
-    }
-}
-
-string inteiroParaString(int valor) {
-    string a;
-    return a;
+   
 }
