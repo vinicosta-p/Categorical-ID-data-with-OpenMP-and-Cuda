@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
 {
     auto start = std::chrono::steady_clock::now();
     
-    mainDataset.open("dataset_00_1000_sem_virg.csv", fstream::in);
+    mainDataset.open("dataset_00_sem_virg.csv", fstream::in);
 
     if (mainDataset.is_open() == false) {
         return -1;
@@ -217,62 +217,24 @@ bool procuraNoCache(int indexDoArquivo, string dado, int linha, int coluna) {
     return true;
 }
 
-void controleDaBuscaRapida(int indexDoArquivo, string id, string dado) {
-
-    if (buscaRapidaDeDado[indexDoArquivo].size() >= 20) {
-        buscaRapidaDeDado[indexDoArquivo].erase(buscaRapidaDeDado[indexDoArquivo].begin());
-    } 
-    // insere dado no map
-    buscaRapidaDeDado[indexDoArquivo][dado] = id;
-    //printf("%s\n", buscaRapidaDeDado[indexDoArquivo][dado].c_str());
-
-}
-
 void pairCodigoDescricao(string nomeArquivo, int indexDoArquivo) {
 
    
     int NUM_COLUM = idxColuna[nomeArquivo];
-    // vetor para o processo de otimização da busca
+    std::fstream arquivo;
+    arquivo.open(nomeArquivo, fstream::app);
+
     for (int i = 0; i < NUM_LINHAS_LIDAS; i++) {
         string dado = matrizDeDados[i][NUM_COLUM];
         
-        if(procuraNoCache(indexDoArquivo, dado, i, NUM_COLUM)){
-            std::fstream arquivo;
-            arquivo.open(nomeArquivo, fstream::in);
-            string linha;
-            string id;
-            string valor;
-            int countID = 1;
-            bool encontrouNoDicionario = true;
-            
-            while (getline(arquivo, linha)) {
-            
-                countID++;
-                int posVirgula = linha.find(',');
-                int posFinal = linha.size();
-                id = linha.substr(0, posVirgula);
-                valor = linha.substr(posVirgula+1, posFinal);
-           
-                if (valor.compare(dado) == 0) {
-                    matrizDeDados[i][NUM_COLUM] = id;
-                    encontrouNoDicionario = false;
-                    break;
-                }
-            
-            }
-            if (encontrouNoDicionario == true) {
-                arquivo.close();
-                arquivo.open(nomeArquivo, fstream::app);
-                id = to_string(countID);
-                matrizDeDados[i][NUM_COLUM] = id;
-                controleDaBuscaRapida(indexDoArquivo, id, dado);
-                arquivo << id << "," << dado << endl;
-
-                arquivo.seekg(0);
-            }
-            arquivo.close();
+        if (procuraNoCache(indexDoArquivo, dado, i, NUM_COLUM)) {
+            int ultimoIndex = buscaRapidaDeDado[indexDoArquivo].size() + 1;
+            buscaRapidaDeDado[indexDoArquivo][dado] = to_string(ultimoIndex);
+            arquivo << to_string(ultimoIndex) << "," << dado << endl;
+            matrizDeDados[i][NUM_COLUM] = to_string(ultimoIndex);
         }
         
     }
+    arquivo.close();
    
 }
