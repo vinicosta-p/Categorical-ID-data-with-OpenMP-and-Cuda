@@ -33,11 +33,23 @@ using namespace std;
 
 fstream mainDataset;
 fstream finalDataset;
+//Onde os dados são guardados
 vector<vector<string>> matrizDeDados;
-map<string, int> idxColuna;
-bool fimDoArq;
+
 vector<string> nomesArquivos;
+//Dicionário que tem como chave o nome das colunas tratadas e o resultado
+//é o index coluna utilizado na matriz de dados
+map<string, int> idxColuna;
+
+//Número de linhas lidas dentro do while
 int NUM_LINHAS_LIDAS;
+
+
+// vector com id e valor dos ultimos valores lidos 
+// o primeiro indice é a coluna, o segundo é o vetor;
+vector<map<string, string>> buscaRapidaDeDado;
+
+bool fimDoArq;
 
 void criarMapComNomeDaColunaAndPosicao();
 
@@ -45,7 +57,7 @@ int atualizarDataSet();
 
 void escrita_do_dataset(vector<vector<string>> escritaMatriz);
 
-void pairCodigoDescricao(string nomeArquivo);
+void pairCodigoDescricao(string nomeArquivo, int indexDoArquivo);
 
 void linhaInicial();
 
@@ -59,10 +71,17 @@ void limpaArquivo() {
 };
 
 
+bool procuraNoCache(int indexDoArquivo, string dado, int linha, int coluna);
+
+void inicializaMatriz_buscaRapidaDeDado() {
+    for (int i = 0; i < nomesArquivos.size(); ++i) {
+        map<string, string> aux; //= { nomesArquivos[i], "0" };
+        buscaRapidaDeDado.push_back(aux);
+    }
+}
+
 int main(int argc, char* argv[])
 {
-   
-    
     auto start = std::chrono::steady_clock::now();
 
     nomesArquivos = { "cdtup.csv", "berco.csv", "portoatracacao.csv", "mes.csv", "tipooperacao.csv",
@@ -73,13 +92,13 @@ int main(int argc, char* argv[])
     if (mainDataset.is_open() == false) {
         return -1;
     }
-   
     
     linhaInicial();
     criarMapComNomeDaColunaAndPosicao();
     fimDoArq = false;
     NUM_LINHAS_LIDAS = 0;
 
+    inicializaMatriz_buscaRapidaDeDado();
     while (!fimDoArq)
     {
         NUM_LINHAS_LIDAS = atualizarDataSet();
@@ -89,7 +108,7 @@ int main(int argc, char* argv[])
 
             #pragma omp for nowait
             for (int i = 0; i < nomesArquivos.size(); ++i) {
-               pairCodigoDescricao(nomesArquivos[i]);
+               pairCodigoDescricao(nomesArquivos[i], i);
 
             }
 
@@ -186,43 +205,74 @@ void escrita_do_dataset(vector<vector<string>> escritaMatriz) {
 }
 
 
-void pairCodigoDescricao(string nomeArquivo) {
+bool procuraNoCache(int indexDoArquivo, string dado, int linha, int coluna) {
+    bool naoVectorEstaVazio = !buscaRapidaDeDado[indexDoArquivo].empty();
+    if (naoVectorEstaVazio) {
+        if (buscaRapidaDeDado[indexDoArquivo].find(dado) != buscaRapidaDeDado[indexDoArquivo].end()) {
+            matrizDeDados[linha][coluna] = buscaRapidaDeDado[indexDoArquivo][dado];
+            return false;
+        };
+    }
 
-    
+    return true;
+}
+
+void controleDaBuscaRapida(int indexDoArquivo, string id, string dado) {
+
+    if (buscaRapidaDeDado[indexDoArquivo].size() >= 20) {
+        buscaRapidaDeDado[indexDoArquivo].erase(buscaRapidaDeDado[indexDoArquivo].begin());
+    } 
+    // insere dado no map
+    buscaRapidaDeDado[indexDoArquivo][dado] = id;
+    //printf("%s\n", buscaRapidaDeDado[indexDoArquivo][dado].c_str());
+
+}
+
+void pairCodigoDescricao(string nomeArquivo, int indexDoArquivo) {
+
+   
     int NUM_COLUM = idxColuna[nomeArquivo];
-  
+    // vetor para o processo de otimização da busca
     for (int i = 0; i < NUM_LINHAS_LIDAS; i++) {
-        std::fstream arquivo;
-        arquivo.open(nomeArquivo, fstream::in);
         string dado = matrizDeDados[i][NUM_COLUM];
-        string linha;
-        string id;
-        string valor;
-        int countID = 1;
-        bool encontrouNoDicionario = true;
+        
+        if(procuraNoCache(indexDoArquivo, dado, i, NUM_COLUM)){
+            std::fstream arquivo;
+            arquivo.open(nomeArquivo, fstream::in);
+            string linha;
+            string id;
+            string valor;
+            int countID = 1;
+            bool encontrouNoDicionario = true;
             
-        while (getline(arquivo, linha)) {
-            countID++;
-            int posVirgula = linha.find(',');
-            int posFinal = linha.size();
-            id = linha.substr(0, posVirgula);
-            valor = linha.substr(posVirgula+1, posFinal);
-            if (valor.compare(dado) == 0) {
-                matrizDeDados[i][NUM_COLUM] = id;
-                encontrouNoDicionario = false;
-                break;
+            while (getline(arquivo, linha)) {
+            
+                countID++;
+                int posVirgula = linha.find(',');
+                int posFinal = linha.size();
+                id = linha.substr(0, posVirgula);
+                valor = linha.substr(posVirgula+1, posFinal);
+           
+                if (valor.compare(dado) == 0) {
+                    matrizDeDados[i][NUM_COLUM] = id;
+                    encontrouNoDicionario = false;
+                    break;
+                }
+            
             }
-            
-        }
-        if (encontrouNoDicionario == true) {
+            if (encontrouNoDicionario == true) {
+                arquivo.close();
+                arquivo.open(nomeArquivo, fstream::app);
+                id = to_string(countID);
+                matrizDeDados[i][NUM_COLUM] = id;
+                controleDaBuscaRapida(indexDoArquivo, id, dado);
+                arquivo << id << "," << dado << endl;
+
+                arquivo.seekg(0);
+            }
             arquivo.close();
-            arquivo.open(nomeArquivo, fstream::app);
-            id = to_string(countID);
-            matrizDeDados[i][NUM_COLUM] = id;
-            arquivo << id << "," << dado << endl;
-            arquivo.seekg(0);
         }
-        arquivo.close();
+        
     }
    
 }
