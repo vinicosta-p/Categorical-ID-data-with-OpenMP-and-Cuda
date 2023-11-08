@@ -36,20 +36,21 @@ fstream finalDataset;
 //Onde os dados são guardados
 vector<vector<string>> matrizDeDados;
 
-vector<string> nomesArquivos;
+vector<string> nomesArquivos = { "cdtup.csv", "berco.csv", "portoatracacao.csv", "mes.csv", "tipooperacao.csv",
+        "tiponavegacaoatracacao.csv", "terminal.csv", "origem.csv", "destino.csv", "naturezacarga.csv", "sentido.csv" };
 //Dicionário que tem como chave o nome das colunas tratadas e o resultado
 //é o index coluna utilizado na matriz de dados
 map<string, int> idxColuna;
 
 //Número de linhas lidas dentro do while
-int NUM_LINHAS_LIDAS;
+int NUM_LINHAS_LIDAS = 0;
 
 
 // vector com id e valor dos ultimos valores lidos 
 // o primeiro indice é a coluna, o segundo é o vetor;
 vector<map<string, string>> buscaRapidaDeDado;
 
-bool fimDoArq;
+bool fimDoArq = false;;
 
 void criarMapComNomeDaColunaAndPosicao();
 
@@ -83,26 +84,24 @@ void inicializaMatriz_buscaRapidaDeDado() {
 int main(int argc, char* argv[])
 {
     auto start = std::chrono::steady_clock::now();
-
-    nomesArquivos = { "cdtup.csv", "berco.csv", "portoatracacao.csv", "mes.csv", "tipooperacao.csv",
-        "tiponavegacaoatracacao.csv", "terminal.csv", "origem.csv", "destino.csv", "naturezacarga.csv", "sentido.csv" };
-    limpaArquivo();
-    mainDataset.open("dataset_00_sem_virg.csv", fstream::in);
     
+    mainDataset.open("dataset_00_1000_sem_virg.csv", fstream::in);
+
     if (mainDataset.is_open() == false) {
         return -1;
     }
     
+    limpaArquivo();
     linhaInicial();
     criarMapComNomeDaColunaAndPosicao();
-    fimDoArq = false;
-    NUM_LINHAS_LIDAS = 0;
+    
+   
 
     inicializaMatriz_buscaRapidaDeDado();
     while (!fimDoArq)
     {
         NUM_LINHAS_LIDAS = atualizarDataSet();
-       
+
         #pragma omp parallel
         {
 
@@ -115,7 +114,9 @@ int main(int argc, char* argv[])
             #pragma omp barrier
                    
         }
+
         escrita_do_dataset(matrizDeDados);
+
         matrizDeDados.clear();
     }
    
@@ -160,7 +161,7 @@ int atualizarDataSet() {
     
     int numLinhas;
     // NUMERO DE LINHAS DA MATRIZ: escolhido de forma árbitria podendo aumentar ou diminuir
-    const int NUM_DE_LINHAS_DA_MATRIZ = 500;
+    const int NUM_DE_LINHAS_DA_MATRIZ = 10000;
 
     for (numLinhas = 0; numLinhas < NUM_DE_LINHAS_DA_MATRIZ; numLinhas++) {
         for (int i = 0; i < 25; i++) {
@@ -169,14 +170,13 @@ int atualizarDataSet() {
             // solução temporia: adicionar = '0\n' na função de escrita do dataset
             if (!getline(mainDataset, dado, ',')) {
                 fimDoArq = true;
-                //cout << "fim do arquivo " << dado << endl;
+                cout << "fim do arquivo " << dado << endl;
                 return numLinhas;
             };
             dadosLocais.push_back(dado);
             dado.clear();
         }
         
-       
         matrizDeDados.push_back(dadosLocais);
         dadosLocais.clear();
     }
