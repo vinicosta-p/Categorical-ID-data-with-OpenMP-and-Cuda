@@ -1,23 +1,24 @@
 /*
-* Esse código trocará os dados categóricos por dados id e criará um dataset final com a troca
-* Ele irá criar arquivos com os dados categóricos e o códigos deles, um para cada coluna;
-* formato do dicionário: id,nome\n
-* A forma como esse código faz essa troca tem a seguinte estrutura:
+* Esse cï¿½digo trocarï¿½ os dados categï¿½ricos por dados id e criarï¿½ um dataset final com a troca
+* Ele irï¿½ criar arquivos com os dados categï¿½ricos e o cï¿½digos deles, um para cada coluna;
+* formato do dicionï¿½rio: id,nome\n
+* A forma como esse cï¿½digo faz essa troca tem a seguinte estrutura:
 *           
-*           LOOP -> acaba quando não houver mais linhas para ler
+*           LOOP -> acaba quando nï¿½o houver mais linhas para ler
 *           {
-*               1.(Thread Principal) lê o dataset e armazena em uma matriz com um tamanho x(a definir) de linhas e 26 colunas
+*               1.(Thread Principal) lï¿½ o dataset e armazena em uma matriz com um tamanho x(a definir) de linhas e 26 colunas
 *               2.(MultiThread) distribui as threads para que elas 
 *                   -> criem os arquivos coluna.csv
-*                   -> leem a matriz, verificam se o valor lido está no arquivo ** SE NÃO ESTIVER insere o valor no arquivo ** e troca a string da matriz para o id
+*                   -> leem a matriz, verificam se o valor lido estï¿½ no arquivo ** SE Nï¿½O ESTIVER insere o valor no arquivo ** e troca a string da matriz para o id
 *                   -> esperam as outras threads
 *               3.(Thread Principal) escreve o arquivo final
 * 
 *           Recursos criados:
 *               var de nome das colunas 
-*               dicionário com o valor das index da coluna dos dados categóricos
+*               dicionï¿½rio com o valor das index da coluna dos dados categï¿½ricos
 */
 
+/** Datased link: https://drive.google.com/file/d/1wfk_0QTIZA-uZktkOpwMmqFDVVIi5O-l/view?usp=sharing */
 
 #include <omp.h>  
 #include <stdio.h>
@@ -33,26 +34,35 @@ using namespace std;
 
 fstream mainDataset;
 fstream finalDataset;
-//Onde os dados são guardados
+
+//Onde os dados sï¿½o guardados
 vector<vector<string>> matrizDeDados;
-
-vector<string> nomesArquivos = { "cdtup.csv", "berco.csv", "portoatracacao.csv", "mes.csv", "tipooperacao.csv",
+vector<string> nomesArquivos = {"berco.csv", "portoatracacao.csv", "mes.csv", "tipooperacao.csv",
         "tiponavegacaoatracacao.csv", "terminal.csv", "origem.csv", "destino.csv", "naturezacarga.csv", "sentido.csv" };
-//Dicionário que tem como chave o nome das colunas tratadas e o resultado
-//é o index coluna utilizado na matriz de dados
-map<string, int> idxColuna;
 
-//Número de linhas lidas dentro do while
+//Dicionï¿½rio que tem como chave o nome das colunas tratadas e o resultado
+//ï¿½ o index coluna utilizado na matriz de dados
+map<string, int> idxColuna = {
+    {"cdtup.csv", 1}, {"berco.csv", 2}, {"portoatracacao.csv", 3}, {"mes.csv", 5},
+    {"tipooperacao.csv", 6}, {"tiponavegacaoatracacao.csv", 7}, {"terminal.csv", 8, },
+    {"origem.csv", 17}, {"destino.csv", 18}, {"naturezacarga.csv", 20}, {"sentido.csv", 23}
+};
+
+const string DATASET_FILENAME = "dataset_00_1000_sem_virg.csv";
+const string FINAL_DATASET_FILENAME = "final_dataset_00_1000_sem_virg.csv";
+const int NUM_COLUNAS_CATEGORICAS = nomesArquivos.size();
+
+//Nï¿½mero de linhas lidas dentro do while
 int NUM_LINHAS_LIDAS = 0;
 
+// NUMERO DE LINHAS DA MATRIZ: escolhido de forma ï¿½rbitria podendo aumentar ou diminuir
+const int NUM_DE_LINHAS_DA_MATRIZ = 10000;
 
 // vector com id e valor dos ultimos valores lidos 
-// o primeiro indice é a coluna, o segundo é o vetor;
+// o primeiro indice ï¿½ a coluna, o segundo ï¿½ o vetor;
 vector<map<string, string>> buscaRapidaDeDado;
 
-bool fimDoArq = false;;
-
-void criarMapComNomeDaColunaAndPosicao();
+bool fimDoArq = false;
 
 int atualizarDataSet();
 
@@ -60,117 +70,99 @@ void escrita_do_dataset(vector<vector<string>> escritaMatriz);
 
 void pairCodigoDescricao(string nomeArquivo, int indexDoArquivo);
 
-void linhaInicial();
+signed char linhaInicial();
 
-void limpaArquivo() {
-    for (int i = 0; i < nomesArquivos.size(); ++i) {
-        fstream arq;
-        arq.open(nomesArquivos[i], fstream::out);
-       // arq.clear();
-        arq.close();
-    }
-};
-
+void limpaArquivo();
 
 bool procuraNoCache(int indexDoArquivo, string dado, int linha, int coluna);
 
-void inicializaMatriz_buscaRapidaDeDado() {
-    for (int i = 0; i < nomesArquivos.size(); ++i) {
-        map<string, string> aux; //= { nomesArquivos[i], "0" };
-        buscaRapidaDeDado.push_back(aux);
-    }
-}
+void inicializaMatriz_buscaRapidaDeDado();
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     auto start = std::chrono::steady_clock::now();
     
-    mainDataset.open("dataset_00_sem_virg.csv", fstream::in);
+    mainDataset.open(DATASET_FILENAME, fstream::in);
 
     if (mainDataset.is_open() == false) {
         return -1;
     }
     
     limpaArquivo();
-    linhaInicial();
-    criarMapComNomeDaColunaAndPosicao();
-    
-   
+    if (!linhaInicial()) {
+        return -1;
+    }
 
     inicializaMatriz_buscaRapidaDeDado();
-    while (!fimDoArq)
-    {
+    while (!fimDoArq) {
         NUM_LINHAS_LIDAS = atualizarDataSet();
 
         #pragma omp parallel
         {
 
             #pragma omp for nowait
-            for (int i = 0; i < nomesArquivos.size(); ++i) {
+            for (int i = 0; i < NUM_COLUNAS_CATEGORICAS; ++i) {
                pairCodigoDescricao(nomesArquivos[i], i);
 
             }
-
             #pragma omp barrier
-                   
         }
 
         escrita_do_dataset(matrizDeDados);
-
         matrizDeDados.clear();
     }
-   
-
 
     mainDataset.close();
-
     auto end = chrono::steady_clock::now();
-    std::cout << "Tempo       : " << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms" << endl;    // Ending of parallel region 
+    printf("Tempo: %ldms\n", chrono::duration_cast<chrono::milliseconds>(end - start).count()); // Ending of parallel region 
 }
+
+void limpaArquivo() {
+    int LINHA_ATUAL = 0;
+    while (NUM_COLUNAS_CATEGORICAS < LINHA_ATUAL) {
+        fstream arq;
+        arq.open(nomesArquivos[LINHA_ATUAL], fstream::trunc);
+        arq.close();
+    }
+};
+
 /*
-    Esse map de consulta para saber o nome da coluna e o index que está associado.
-    esse map é utilizado na função pairCodigoDescricao()
+    Esse map de consulta para saber o nome da coluna e o index que estï¿½ associado.
+    esse map ï¿½ utilizado na funï¿½ï¿½o pairCodigoDescricao()
 */
-void linhaInicial() {
-    
-    finalDataset.open("dataset_00_1000_sem_virg_FINAL.csv", fstream::app);
+signed char linhaInicial() {
+    finalDataset.open(FINAL_DATASET_FILENAME, fstream::app);
+    if (!finalDataset.is_open()) {
+        return 0;
+    }
 
     string linha;
-    
     getline(mainDataset, linha);
 
     finalDataset << linha;
 
     finalDataset.close();
-    
+    return 1;
 }
 
-void criarMapComNomeDaColunaAndPosicao() {
-    vector<int> numeroDaColuna = { 1, 2, 3, 5, 6, 7, 8, 17, 18, 20, 23 };
-    int numColum = 0;
-    for (int i = 0; i < nomesArquivos.size(); ++i) {
-        idxColuna.insert(pair<string, int>(nomesArquivos[i], numeroDaColuna[numColum]));
-        numColum++;
+void inicializaMatriz_buscaRapidaDeDado() {
+    for (int i = 0; i < NUM_COLUNAS_CATEGORICAS; ++i) {
+        map<string, string> aux; //= { nomesArquivos[i], "0" };
+        buscaRapidaDeDado.push_back(aux);
     }
-
 }
 
-//  ler o dataset csv e inserir em uma matriz, ele retorna o número de linhas que leu;
+//  ler o dataset csv e inserir em uma matriz, ele retorna o nï¿½mero de linhas que leu;
 int atualizarDataSet() {
     vector<string> dadosLocais;
-    
     int numLinhas;
-    // NUMERO DE LINHAS DA MATRIZ: escolhido de forma árbitria podendo aumentar ou diminuir
-    const int NUM_DE_LINHAS_DA_MATRIZ = 10000;
-
     for (numLinhas = 0; numLinhas < NUM_DE_LINHAS_DA_MATRIZ; numLinhas++) {
         for (int i = 0; i < 25; i++) {
             string dado;
-            //RESOLVER BUG DA ÚLTIMA LINHA NAO ADICIONAR '0\n'
-            // solução temporia: adicionar = '0\n' na função de escrita do dataset
+            //RESOLVER BUG DA ï¿½LTIMA LINHA NAO ADICIONAR '0\n'
+            // soluï¿½ï¿½o temporia: adicionar = '0\n' na funï¿½ï¿½o de escrita do dataset
             if (!getline(mainDataset, dado, ',')) {
                 fimDoArq = true;
-                cout << "fim do arquivo " << dado << endl;
+                printf("fim do arquivo %s\n", dado.c_str());
                 return numLinhas;
             };
             dadosLocais.push_back(dado);
@@ -183,13 +175,12 @@ int atualizarDataSet() {
     return numLinhas;
 }
 
-// Escreve o datasetFinal toda vez que a matriz é atualizada
+// Escreve o datasetFinal toda vez que a matriz ï¿½ atualizada
 void escrita_do_dataset(vector<vector<string>> escritaMatriz) {
-    
     int NUM_LINHAS = escritaMatriz.size();
     int NUM_COLUM = 25;
     if (finalDataset.is_open() == false) {
-        finalDataset.open("dataset_00_1000_sem_virg_FINAL.csv", fstream::app);
+        finalDataset.open(FINAL_DATASET_FILENAME, fstream::app);
     }
   
     for (int i = 0; i < NUM_LINHAS; i++) {
@@ -197,13 +188,13 @@ void escrita_do_dataset(vector<vector<string>> escritaMatriz) {
             finalDataset << escritaMatriz[i][j].c_str() << ',';
         }
     }
-    //GAMBIARRA. ACHAR UMA SOLUÇÃO MAIS LIMPA SEM QUEBRA DE FLUXO: O MOTIVO FOI A FUNÇÃO DE GETLINE NAO ESTAVA PEGANDO O ULTIMO VALOR
+
+    //GAMBIARRA. ACHAR UMA SOLUï¿½ï¿½O MAIS LIMPA SEM QUEBRA DE FLUXO: O MOTIVO FOI A FUNï¿½ï¿½O DE GETLINE NAO ESTAVA PEGANDO O ULTIMO VALOR
     if (fimDoArq) {
         finalDataset << "0\n";
     }
     finalDataset.close();
 }
-
 
 bool procuraNoCache(int indexDoArquivo, string dado, int linha, int coluna) {
     bool naoVectorEstaVazio = !buscaRapidaDeDado[indexDoArquivo].empty();
@@ -218,23 +209,17 @@ bool procuraNoCache(int indexDoArquivo, string dado, int linha, int coluna) {
 }
 
 void pairCodigoDescricao(string nomeArquivo, int indexDoArquivo) {
-
-   
     int NUM_COLUM = idxColuna[nomeArquivo];
     std::fstream arquivo;
     arquivo.open(nomeArquivo, fstream::app);
-
     for (int i = 0; i < NUM_LINHAS_LIDAS; i++) {
         string dado = matrizDeDados[i][NUM_COLUM];
-        
         if (procuraNoCache(indexDoArquivo, dado, i, NUM_COLUM)) {
             int ultimoIndex = buscaRapidaDeDado[indexDoArquivo].size() + 1;
             buscaRapidaDeDado[indexDoArquivo][dado] = to_string(ultimoIndex);
             arquivo << to_string(ultimoIndex) << "," << dado << endl;
             matrizDeDados[i][NUM_COLUM] = to_string(ultimoIndex);
         }
-        
     }
     arquivo.close();
-   
 }
